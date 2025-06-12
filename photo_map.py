@@ -1,13 +1,31 @@
 import os
 from PIL import Image, ExifTags
 from PIL.ExifTags import TAGS, GPSTAGS
-import folium
-from folium.plugins import MarkerCluster
+import json
+import uuid
+import sys
 import base64
 import io
 import tkinter as tk
 from tkinter import filedialog
-from folium import IFrame
+
+AUTHORIZED_MACS = {
+    # 80-E8-2C-EF-97-E0 belongs to 124507
+    "80-E8-2C-EF-97-E0": "124507",
+    # 6C-0B-5E-42-EC-0A belongs to 1258732
+    "6C-0B-5E-42-EC-0A": "1258732",
+}
+
+
+def get_mac_address() -> str:
+    mac = uuid.getnode()
+    return "-".join(format(mac, "012X")[i:i+2] for i in range(0, 12, 2))
+
+
+current_mac = get_mac_address().upper()
+if current_mac not in AUTHORIZED_MACS:
+    print("해당 장비에서만 실행 가능한 프로그램입니다.")
+    sys.exit()
 
 
 def select_folder():
@@ -109,52 +127,70 @@ if not points:
     print('GPS 정보가 있는 사진이 없습니다.')
     exit()
 
-# Folium 지도 생성 (ESRI Satellite 타일 사용)
+# 지도와 사진을 나란히 보여줄 HTML 생성
 center_lat = sum([p['lat'] for p in points]) / len(points)
 center_lon = sum([p['lon'] for p in points]) / len(points)
-m = folium.Map(location=[center_lat, center_lon], zoom_start=16, tiles=None)
 
-# ESRI Satellite 타일 추가
 esri_satellite_tiles = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-folium.TileLayer(
-    tiles=esri_satellite_tiles,
-    attr='Esri',
-    name='Esri Satellite',
-    overlay=False,
-    control=True
-).add_to(m)
 
-# 마커 클러스터 생성
-marker_cluster = MarkerCluster(
-    name="사진 마커",
-    overlay=True,
-    control=True,
-    options={
-        'maxClusterRadius': 40,
-        'spiderfyOnMaxZoom': True,
-    }
-).add_to(m)
+data_json = json.dumps(points)
 
-# 마커 추가 (클러스터에 추가)
-for p in points:
-    if p['thumb_b64'] and p['width'] and p['height']:
-        scale_w = int(p['width'] * 1.5)
-        scale_h = int(p['height'] * 1.5)
-        html = f'<img src="data:image/jpeg;base64,{p["thumb_b64"]}" width="{scale_w}" height="{scale_h}">' 
-        iframe = IFrame(html, width=scale_w + 20, height=scale_h + 20)
-        popup = folium.Popup(iframe, max_width=scale_w + 40)
-    else:
-        html = f'<b>(썸네일 없음)</b>'
-        iframe = IFrame(html, width=200, height=40)
-        popup = folium.Popup(iframe, max_width=220)
+html_content = f"""
+<!DOCTYPE html>
+<html lang=\"ko\">
+<head>
+    <meta charset=\"utf-8\">
+    <title>Photo Map</title>
+    <link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.9.3/dist/leaflet.css\" />
+    <link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css\" />
+    <link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css\" />
+    <style>
+        body {{ margin: 0; display: flex; height: 100vh; }}
+        #map {{ width: 50%; }}
+        #photo-container {{ width: 50%; overflow-y: auto; padding: 10px; box-sizing: border-box; }}
+        #photo-container img {{ max-width: 100%; height: auto; }}
+    </style>
+</head>
+<body>
+    <div id=\"map\"></div>
+    <div id=\"photo-container\"><p>사진을 클릭하면 여기에 표시됩니다.</p></div>
 
-    folium.Marker(
-        [p['lat'], p['lon']],
-        popup=popup,
-        tooltip=p['file']
-    ).add_to(marker_cluster)
+    <script src=\"https://unpkg.com/leaflet@1.9.3/dist/leaflet.js\"></script>
+    <script src=\"https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js\"></script>
+    <script>
+        var map = L.map('map').setView([{center_lat}, {center_lon}], 16);
+        L.tileLayer('{esri_satellite_tiles}', {{ attribution: 'Esri' }}).addTo(map);
+        var markers = L.markerClusterGroup({{ maxClusterRadius: 40, spiderfyOnMaxZoom: true }});
+        var data = {data_json};
+        data.forEach(function(p) {{
+            var marker = L.marker([p.lat, p.lon], {{ title: p.file }});
+            marker.on('click', function() {{
+                var div = document.getElementById('photo-container');
+                var img = '<img src="data:image/jpeg;base64,' + p.thumb_b64 + '" />';
+                div.innerHTML = '<h4>' + p.file + '</h4>' + img;
+            }});
+            markers.addLayer(marker);
+        }});
+        map.addLayer(markers);
+    </script>
+</body>
+</html>
+"""
 
 # 저장 경로
-save_path = os.path.join(folder_path, "photo_map.html")
-m.save(save_path)
-print(f'photo_map.html 파일이 "{folder_path}" 폴더에 생성되었습니다!')
+def get_unique_path(directory: str, filename: str) -> str:
+    """Return a unique file path in directory for filename."""
+    base, ext = os.path.splitext(filename)
+    candidate = filename
+    counter = 1
+    while os.path.exists(os.path.join(directory, candidate)):
+        candidate = f"{base}_{counter}{ext}"
+        counter += 1
+    return os.path.join(directory, candidate)
+
+
+save_path = get_unique_path(folder_path, "photo_map.html")
+with open(save_path, "w", encoding="utf-8") as f:
+    f.write(html_content)
+
+print(f'{os.path.basename(save_path)} 파일이 "{folder_path}" 폴더에 생성되었습니다!')
