@@ -9,7 +9,12 @@ import io
 import tkinter as tk
 from tkinter import filedialog
 
-AUTHORIZED_MAC = "80-E8-2C-EF-97-E0"
+AUTHORIZED_MACS = {
+    # 80-E8-2C-EF-97-E0 belongs to 124507
+    "80-E8-2C-EF-97-E0": "124507",
+    # 6C-0B-5E-42-EC-0A belongs to 1258732
+    "6C-0B-5E-42-EC-0A": "1258732",
+}
 
 
 def get_mac_address() -> str:
@@ -17,7 +22,8 @@ def get_mac_address() -> str:
     return "-".join(format(mac, "012X")[i:i+2] for i in range(0, 12, 2))
 
 
-if get_mac_address().upper() != AUTHORIZED_MAC:
+current_mac = get_mac_address().upper()
+if current_mac not in AUTHORIZED_MACS:
     print("해당 장비에서만 실행 가능한 프로그램입니다.")
     sys.exit()
 
