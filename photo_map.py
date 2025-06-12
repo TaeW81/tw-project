@@ -126,8 +126,8 @@ html_content = f"""
     <link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css\" />
     <style>
         body {{ margin: 0; display: flex; height: 100vh; }}
-        #map {{ width: 60%; }}
-        #photo-container {{ width: 40%; overflow-y: auto; padding: 10px; box-sizing: border-box; }}
+        #map {{ width: 50%; }}
+        #photo-container {{ width: 50%; overflow-y: auto; padding: 10px; box-sizing: border-box; }}
         #photo-container img {{ max-width: 100%; height: auto; }}
     </style>
 </head>
