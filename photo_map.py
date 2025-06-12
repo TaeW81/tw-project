@@ -158,8 +158,19 @@ html_content = f"""
 """
 
 # 저장 경로
-save_path = os.path.join(folder_path, "photo_map.html")
+def get_unique_path(directory: str, filename: str) -> str:
+    """Return a unique file path in directory for filename."""
+    base, ext = os.path.splitext(filename)
+    candidate = filename
+    counter = 1
+    while os.path.exists(os.path.join(directory, candidate)):
+        candidate = f"{base}_{counter}{ext}"
+        counter += 1
+    return os.path.join(directory, candidate)
+
+
+save_path = get_unique_path(folder_path, "photo_map.html")
 with open(save_path, "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print(f'photo_map.html 파일이 "{folder_path}" 폴더에 생성되었습니다!')
+print(f'{os.path.basename(save_path)} 파일이 "{folder_path}" 폴더에 생성되었습니다!')
