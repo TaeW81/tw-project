@@ -1,4 +1,4 @@
-;;; streetinlet_install.lisp
+;;; streetinlet_install.lsp
 ;;; AutoCAD LISP script to automatically place street inlets along a pipe route.
 ;;; Command: STINLET
 ;;;
