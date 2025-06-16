@@ -1,7 +1,7 @@
 ;;-----------------------------------------------------------------------------
 ;; PROFILEEDIT - 종단면도 라인의 끝점을 숫자 값에 따라 이동
 ;;-----------------------------------------------------------------------------
-(defun c:PROFILEEDIT (/ ent data pt1 pt2 info1 info2 val1 val2 txt1 txt2 ang)
+(defun c:PROFILEEDIT (/ ent data pt1 pt2 info1 info2 val1 val2 txt1 txt2 ang midPt mids)
   (vl-load-com)
   (prompt "\n종단면도 라인을 선택하세요: ")
   (setq ent (car (entsel)))
@@ -29,6 +29,10 @@
           (setq ang (angle pt1 pt2))
           (if txt1 (rotateText txt1 ang))
           (if txt2 (rotateText txt2 ang))
+          ;; Rotate texts near the midpoint if within distance 2
+          (setq midPt (midpoint pt1 pt2)
+                mids  (getTextsInRadius midPt 2.0))
+          (foreach t mids (rotateText t ang))
         )
         (prompt "\n끝점 근처에서 숫자 텍스트를 찾을 수 없습니다."))
     )
@@ -72,6 +76,28 @@
 (defun rotateText (ent ang / obj)
   (setq obj (vlax-ename->vla-object ent))
   (vla-put-Rotation obj ang))
+
+;; 두 점의 중간점을 계산
+(defun midpoint (pt1 pt2)
+  (mapcar '(lambda (a b) (/ (+ a b) 2.0)) pt1 pt2))
+
+;; 주어진 반경 내의 모든 텍스트 엔티티를 반환
+(defun getTextsInRadius (pt rad / ss idx ent ed ins dist result)
+  (setq result nil)
+  (setq ss (ssget "_C"
+                  (list (- (car pt) rad) (- (cadr pt) rad))
+                  (list (+ (car pt) rad) (+ (cadr pt) rad))
+                  '((0 . "TEXT,MTEXT"))))
+  (setq idx 0)
+  (while (and ss (< idx (sslength ss)))
+    (setq ent (ssname ss idx)
+          ed  (entget ent)
+          ins (cdr (assoc 10 ed))
+          dist (distance pt ins))
+    (if (< dist rad)
+      (setq result (cons ent result)))
+    (setq idx (1+ idx)))
+  result)
 
 (princ "\nPROFILEEDIT 리습이 로드되었습니다. PROFILEEDIT 명령을 사용하세요.")
 (princ)
