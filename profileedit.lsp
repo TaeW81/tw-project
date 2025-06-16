@@ -29,9 +29,9 @@
           (setq ang (angle pt1 pt2))
           (if txt1 (rotateText txt1 ang))
           (if txt2 (rotateText txt2 ang))
-          ;; 중심점 기준 반경 5 이내의 텍스트 회전
+          ;; 중심점 기준 반경 2 이내의 텍스트 회전
           (setq midPt (midpoint pt1 pt2)
-                mids  (getTextsInRadius midPt 5.0))
+                mids  (getTextsInRadius midPt 2.0))
           (foreach t mids (rotateText t ang))
         )
         (prompt "\n끝점 근처에서 숫자 텍스트를 찾을 수 없습니다."))
