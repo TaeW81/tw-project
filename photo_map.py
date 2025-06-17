@@ -10,6 +10,7 @@ EXIF GPS 정보를 추출하여, 위성 지도에 위치를 표시하고
 - 썸네일 자동 생성 및 회전 처리
 - Leaflet.js 기반 위성 지도 + MarkerCluster 시각화
 - 클릭 시 사진 표시 인터페이스 포함
+- 사진 경로(선택한 폴더 기준) 표시
 - 실행 장비 제한 기능 (MAC 주소 기반 보안)
 
 📁 출력결과:
@@ -142,16 +143,16 @@ if not folder_path:
 # 사진 파일 반복 처리 및 좌표 추출
 points = []
 for file_path in collect_image_files(folder_path):
-    file = os.path.basename(file_path)
+    rel_path = os.path.relpath(file_path, folder_path)
     gps_data = get_exif_gps(file_path)
     if gps_data and 'GPSLatitude' in gps_data and 'GPSLongitude' in gps_data:
         try:
             lat = dms_to_dd(gps_data['GPSLatitude'], gps_data['GPSLatitudeRef'])
             lon = dms_to_dd(gps_data['GPSLongitude'], gps_data['GPSLongitudeRef'])
             thumb_b64, width, height = get_thumbnail_base64_and_size(file_path)
-            points.append({'file': file, 'lat': lat, 'lon': lon, 'thumb_b64': thumb_b64, 'width': width, 'height': height})
+            points.append({'path': rel_path, 'lat': lat, 'lon': lon, 'thumb_b64': thumb_b64, 'width': width, 'height': height})
         except Exception as e:
-            print(f"{file}의 GPS 정보 변환 중 오류 발생: {e}")
+            print(f"{rel_path}의 GPS 정보 변환 중 오류 발생: {e}")
 
 if not points:
     print('GPS 정보가 있는 사진이 없습니다.')
@@ -193,11 +194,11 @@ html_content = f"""
         var markers = L.markerClusterGroup({{ maxClusterRadius: 40, spiderfyOnMaxZoom: true }});
         var data = {data_json};
         data.forEach(function(p) {{
-            var marker = L.marker([p.lat, p.lon], {{ title: p.file }});
+            var marker = L.marker([p.lat, p.lon], {{ title: p.path }});
             marker.on('click', function() {{
                 var div = document.getElementById('photo-container');
                 var img = '<img src="data:image/jpeg;base64,' + p.thumb_b64 + '" />';
-                div.innerHTML = '<h4>' + p.file + '</h4>' + img;
+                div.innerHTML = '<h4>' + p.path + '</h4>' + img;
             }});
             markers.addLayer(marker);
         }});
