@@ -101,6 +101,16 @@ def get_thumbnail_base64_and_size(image_path):
         return None, None, None
 
 
+def collect_image_files(folder: str) -> list[str]:
+    """Recursively gather JPEG files under the given folder."""
+    image_files = []
+    for root, _, files in os.walk(folder):
+        for file in files:
+            if file.lower().endswith((".jpg", ".jpeg")):
+                image_files.append(os.path.join(root, file))
+    return image_files
+
+
 # 폴더 선택
 folder_path = select_folder()
 if not folder_path:
@@ -109,19 +119,17 @@ if not folder_path:
 
 # 사진 파일 반복 처리 및 좌표 추출
 points = []
-for root, dirs, files in os.walk(folder_path):
-    for file in files:
-        if file.lower().endswith(('.jpg', '.jpeg')):
-            file_path = os.path.join(root, file)
-            gps_data = get_exif_gps(file_path)
-            if gps_data and 'GPSLatitude' in gps_data and 'GPSLongitude' in gps_data:
-                try:
-                    lat = dms_to_dd(gps_data['GPSLatitude'], gps_data['GPSLatitudeRef'])
-                    lon = dms_to_dd(gps_data['GPSLongitude'], gps_data['GPSLongitudeRef'])
-                    thumb_b64, width, height = get_thumbnail_base64_and_size(file_path)
-                    points.append({'file': file, 'lat': lat, 'lon': lon, 'thumb_b64': thumb_b64, 'width': width, 'height': height})
-                except Exception as e:
-                    print(f"{file}의 GPS 정보 변환 중 오류 발생: {e}")
+for file_path in collect_image_files(folder_path):
+    file = os.path.basename(file_path)
+    gps_data = get_exif_gps(file_path)
+    if gps_data and 'GPSLatitude' in gps_data and 'GPSLongitude' in gps_data:
+        try:
+            lat = dms_to_dd(gps_data['GPSLatitude'], gps_data['GPSLatitudeRef'])
+            lon = dms_to_dd(gps_data['GPSLongitude'], gps_data['GPSLongitudeRef'])
+            thumb_b64, width, height = get_thumbnail_base64_and_size(file_path)
+            points.append({'file': file, 'lat': lat, 'lon': lon, 'thumb_b64': thumb_b64, 'width': width, 'height': height})
+        except Exception as e:
+            print(f"{file}의 GPS 정보 변환 중 오류 발생: {e}")
 
 if not points:
     print('GPS 정보가 있는 사진이 없습니다.')
