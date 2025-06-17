@@ -1,3 +1,6 @@
+"""선택한 폴더 및 하위 폴더의 사진에서 GPS 정보를 추출하여
+지도와 미리보기를 생성하는 스크립트."""
+
 import os
 from PIL import Image, ExifTags
 from PIL.ExifTags import TAGS, GPSTAGS
