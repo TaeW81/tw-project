@@ -197,7 +197,9 @@ def get_unique_path(directory: str, filename: str) -> str:
     return os.path.join(directory, candidate)
 
 
-save_path = get_unique_path(folder_path, "photo_map.html")
+folder_name = os.path.basename(os.path.normpath(folder_path))
+html_filename = f"{folder_name}.html"
+save_path = get_unique_path(folder_path, html_filename)
 with open(save_path, "w", encoding="utf-8") as f:
     f.write(html_content)
 
