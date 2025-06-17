@@ -1,3 +1,26 @@
+"""
+📌 사진 GPS 시각화 자동화 프로그램 (내부 전용 실행)
+
+이 프로그램은 사용자가 선택한 사진 폴더 내 이미지 파일들에서 
+EXIF GPS 정보를 추출하여, 위성 지도에 위치를 표시하고 
+사진을 함께 보여주는 HTML 파일(photo_map.html)을 생성합니다.
+
+주요 기능:
+- 사진의 GPS 정보(DMS → Decimal) 자동 추출
+- 썸네일 자동 생성 및 회전 처리
+- Leaflet.js 기반 위성 지도 + MarkerCluster 시각화
+- 클릭 시 사진 표시 인터페이스 포함
+- 사진 경로(선택한 폴더 기준) 표시
+- 실행 장비 제한 기능 (MAC 주소 기반 보안)
+
+📁 출력결과:
+- photo_map.html : 선택한 폴더에 저장, 브라우저에서 지도와 사진 확인 가능
+
+🛡️ 실행 제한:
+- 등록된 MAC 주소가 아닌 경우 실행 차단
+"""
+
+
 import os
 from PIL import Image, ExifTags
 from PIL.ExifTags import TAGS, GPSTAGS
@@ -101,6 +124,16 @@ def get_thumbnail_base64_and_size(image_path):
         return None, None, None
 
 
+def collect_image_files(folder: str) -> list[str]:
+    """Recursively gather JPEG files under the given folder."""
+    image_files = []
+    for root, _, files in os.walk(folder):
+        for file in files:
+            if file.lower().endswith((".jpg", ".jpeg")):
+                image_files.append(os.path.join(root, file))
+    return image_files
+
+
 # 폴더 선택
 folder_path = select_folder()
 if not folder_path:
@@ -109,19 +142,17 @@ if not folder_path:
 
 # 사진 파일 반복 처리 및 좌표 추출
 points = []
-for root, dirs, files in os.walk(folder_path):
-    for file in files:
-        if file.lower().endswith(('.jpg', '.jpeg')):
-            file_path = os.path.join(root, file)
-            gps_data = get_exif_gps(file_path)
-            if gps_data and 'GPSLatitude' in gps_data and 'GPSLongitude' in gps_data:
-                try:
-                    lat = dms_to_dd(gps_data['GPSLatitude'], gps_data['GPSLatitudeRef'])
-                    lon = dms_to_dd(gps_data['GPSLongitude'], gps_data['GPSLongitudeRef'])
-                    thumb_b64, width, height = get_thumbnail_base64_and_size(file_path)
-                    points.append({'file': file, 'lat': lat, 'lon': lon, 'thumb_b64': thumb_b64, 'width': width, 'height': height})
-                except Exception as e:
-                    print(f"{file}의 GPS 정보 변환 중 오류 발생: {e}")
+for file_path in collect_image_files(folder_path):
+    rel_path = os.path.relpath(file_path, folder_path)
+    gps_data = get_exif_gps(file_path)
+    if gps_data and 'GPSLatitude' in gps_data and 'GPSLongitude' in gps_data:
+        try:
+            lat = dms_to_dd(gps_data['GPSLatitude'], gps_data['GPSLatitudeRef'])
+            lon = dms_to_dd(gps_data['GPSLongitude'], gps_data['GPSLongitudeRef'])
+            thumb_b64, width, height = get_thumbnail_base64_and_size(file_path)
+            points.append({'path': rel_path, 'lat': lat, 'lon': lon, 'thumb_b64': thumb_b64, 'width': width, 'height': height})
+        except Exception as e:
+            print(f"{rel_path}의 GPS 정보 변환 중 오류 발생: {e}")
 
 if not points:
     print('GPS 정보가 있는 사진이 없습니다.')
@@ -163,11 +194,11 @@ html_content = f"""
         var markers = L.markerClusterGroup({{ maxClusterRadius: 40, spiderfyOnMaxZoom: true }});
         var data = {data_json};
         data.forEach(function(p) {{
-            var marker = L.marker([p.lat, p.lon], {{ title: p.file }});
+            var marker = L.marker([p.lat, p.lon], {{ title: p.path }});
             marker.on('click', function() {{
                 var div = document.getElementById('photo-container');
                 var img = '<img src="data:image/jpeg;base64,' + p.thumb_b64 + '" />';
-                div.innerHTML = '<h4>' + p.file + '</h4>' + img;
+                div.innerHTML = '<h4>' + p.path + '</h4>' + img;
             }});
             markers.addLayer(marker);
         }});
@@ -189,7 +220,9 @@ def get_unique_path(directory: str, filename: str) -> str:
     return os.path.join(directory, candidate)
 
 
-save_path = get_unique_path(folder_path, "photo_map.html")
+folder_name = os.path.basename(os.path.normpath(folder_path))
+html_filename = f"{folder_name}.html"
+save_path = get_unique_path(folder_path, html_filename)
 with open(save_path, "w", encoding="utf-8") as f:
     f.write(html_content)
 
