@@ -194,6 +194,9 @@ def main() -> None:
     # Map tile sources
     esri = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
     vworld_base = "http://xdworld.vworld.kr:8080/2d/Base/202002/{z}/{x}/{y}.png"
+    vworld_sat = "http://xdworld.vworld.kr:8080/2d/Satellite/202002/{z}/{x}/{y}.jpeg"
+    daum_base = "https://map1.daumcdn.net/map_2d/2204leq/L{z}/{x}/{y}.png"
+    daum_sat = "https://map1.daumcdn.net/map_skyview/L{z}/{y}/{x}.jpg"
 
     html = f"""
 <!DOCTYPE html>
@@ -205,16 +208,20 @@ def main() -> None:
 <link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css\" />
 <link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css\" />
 <style>
+# map and photo container layout
 body {{ margin: 0; display: flex; height: 100vh; }}
-#map {{ width: 50%; }}
+#map {{ width: 100%; transition: width 0.3s; }}
 #photo-container {{
     width: 50%;
     overflow-y: auto;
     padding: 10px;
     box-sizing: border-box;
-    display: flex;
+    display: none;
     flex-direction: column;
     align-items: center;
+}}
+#photo-container.visible {{
+    display: flex;
 }}
 #photo-container img {{
     max-width: 100%;
@@ -235,7 +242,10 @@ h4, p {{
 <script>
 var baseLayers = {{
     'Esri Satellite': L.tileLayer('{esri}', {{ attribution: 'Esri' }}),
-    'VWorld Road': L.tileLayer('{vworld_base}', {{ attribution: 'VWorld' }})
+    'VWorld Road': L.tileLayer('{vworld_base}', {{ attribution: 'VWorld' }}),
+    'VWorld Satellite': L.tileLayer('{vworld_sat}', {{ attribution: 'VWorld' }}),
+    'Daum Road': L.tileLayer('{daum_base}', {{ attribution: 'Daum' }}),
+    'Daum Satellite': L.tileLayer('{daum_sat}', {{ attribution: 'Daum' }})
 }};
 var map = L.map('map', {{
     center: [{center_lat}, {center_lon}],
@@ -244,13 +254,31 @@ var map = L.map('map', {{
 }});
 L.control.layers(baseLayers, null, {{ collapsed: false }}).addTo(map);
 var markers = L.markerClusterGroup({{ maxClusterRadius: 40 }});
+function showPhoto(p) {{
+    var div = document.getElementById('photo-container');
+    div.innerHTML = '<button id="close-btn">닫기</button>' +
+                    '<h4>' + p.path + '</h4><p>[' + p.taken_time + ']</p>' +
+                    '<img src="data:image/jpeg;base64,' + p.thumb_b64 + '" />';
+    div.classList.add('visible');
+    document.getElementById('map').style.width = '50%';
+    map.invalidateSize();
+    document.getElementById('close-btn').addEventListener('click', hidePhoto);
+}}
+
+function hidePhoto() {{
+    var div = document.getElementById('photo-container');
+    if (!div.classList.contains('visible')) return;
+    div.classList.remove('visible');
+    document.getElementById('map').style.width = '100%';
+    map.invalidateSize();
+}}
+
+map.on('click', hidePhoto);
 var data = {data_json};
 data.forEach(function(p) {{
     var marker = L.marker([p.lat, p.lon], {{ title: p.path }});
     marker.on('click', function() {{
-        var div = document.getElementById('photo-container');
-        div.innerHTML = '<h4>' + p.path + '</h4><p>[' + p.taken_time + ']</p>' +
-                        '<img src="data:image/jpeg;base64,' + p.thumb_b64 + '" />';
+        showPhoto(p);
     }});
     markers.addLayer(marker);
 }});
