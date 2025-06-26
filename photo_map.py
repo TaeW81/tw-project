@@ -174,10 +174,7 @@ def main() -> None:
 
     # Map tile sources
     esri = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-    vworld_sat = "http://xdworld.vworld.kr:8080/2d/Satellite/202002/{z}/{x}/{y}.jpeg"
     vworld_base = "http://xdworld.vworld.kr:8080/2d/Base/202002/{z}/{x}/{y}.png"
-    daum_sat = "https://map.daumcdn.net/map_skyview/L{z}/{y}/{x}.jpg"
-    daum_road = "https://map.daumcdn.net/map_2d/1907nylon/L{z}/{y}/{x}.png"
 
     html = f"""
 <!DOCTYPE html>
@@ -219,10 +216,7 @@ h4, p {{
 <script>
 var baseLayers = {{
     'Esri Satellite': L.tileLayer('{esri}', {{ attribution: 'Esri' }}),
-    'VWorld Satellite': L.tileLayer('{vworld_sat}', {{ attribution: 'VWorld' }}),
-    'VWorld Road': L.tileLayer('{vworld_base}', {{ attribution: 'VWorld' }}),
-    'Daum Satellite': L.tileLayer('{daum_sat}', {{ attribution: 'Daum' }}),
-    'Daum Road': L.tileLayer('{daum_road}', {{ attribution: 'Daum' }})
+    'VWorld Road': L.tileLayer('{vworld_base}', {{ attribution: 'VWorld' }})
 }};
 var map = L.map('map', {{
     center: [{center_lat}, {center_lon}],
