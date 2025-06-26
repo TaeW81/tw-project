@@ -68,12 +68,20 @@ def auto_rotate_image(img):
 
 
 def get_thumbnail_base64_and_size(image_path):
+    """Return base64 encoded thumbnail along with its size.
+
+    Thumbnails are scaled so that the height does not exceed 900 pixels to
+    better fit 1080p displays.
+    """
     try:
         img = Image.open(image_path)
         img = auto_rotate_image(img)
-        orig_width, orig_height = img.size
-        if orig_height > 500:
-            img.thumbnail((img.width * 10, 500), Image.LANCZOS)
+
+        max_height = 900
+        if img.height > max_height:
+            scale = max_height / img.height
+            img = img.resize((int(img.width * scale), max_height), Image.LANCZOS)
+
         width, height = img.size
         buffer = io.BytesIO()
         img.save(buffer, format="JPEG")
@@ -114,14 +122,40 @@ center_lat = sum([p['lat'] for p in points]) / len(points)
 center_lon = sum([p['lon'] for p in points]) / len(points)
 m = folium.Map(location=[center_lat, center_lon], zoom_start=16, tiles=None)
 
-# ESRI Satellite 타일 추가
-esri_satellite_tiles = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+# 기본 ESRI Satellite 타일 추가
+esri_satellite_tiles = (
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+)
 folium.TileLayer(
     tiles=esri_satellite_tiles,
-    attr='Esri',
-    name='Esri Satellite',
+    attr="Esri",
+    name="Esri Satellite",
     overlay=False,
-    control=True
+    control=True,
+).add_to(m)
+
+# VWorld 위성 타일 추가
+vworld_satellite_tiles = (
+    "http://xdworld.vworld.kr:8080/2d/Satellite/202002/{z}/{x}/{y}.jpeg"
+)
+folium.TileLayer(
+    tiles=vworld_satellite_tiles,
+    attr="VWorld",
+    name="VWorld Satellite",
+    overlay=False,
+    control=True,
+).add_to(m)
+
+# Daum 위성 타일 추가
+daum_satellite_tiles = (
+    "https://map.daumcdn.net/map_skyview/L{z}/{y}/{x}.jpg"
+)
+folium.TileLayer(
+    tiles=daum_satellite_tiles,
+    attr="Daum",
+    name="Daum Satellite",
+    overlay=False,
+    control=True,
 ).add_to(m)
 
 # 마커 클러스터 생성
@@ -153,6 +187,9 @@ for p in points:
         popup=popup,
         tooltip=p['file']
     ).add_to(marker_cluster)
+
+# 레이어 컨트롤 추가하여 타일 선택 가능하도록 함
+folium.LayerControl(collapsed=False).add_to(m)
 
 # 저장 경로
 save_path = os.path.join(folder_path, "photo_map.html")
