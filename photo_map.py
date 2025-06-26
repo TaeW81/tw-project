@@ -2,10 +2,29 @@ import os
 import json
 import base64
 import io
+import sys
+import uuid
 from PIL import Image, ExifTags
 from PIL.ExifTags import TAGS, GPSTAGS
 import tkinter as tk
 from tkinter import filedialog, messagebox
+
+
+AUTHORIZED_MACS = {
+    "80-E8-2C-EF-97-E0": "124507",
+    "6C-0B-5E-42-EC-0A": "125873",
+}
+
+
+def get_mac_address() -> str:
+    """Return the MAC address of the current machine."""
+    mac = uuid.getnode()
+    return "-".join(format(mac, "012X")[i : i + 2] for i in range(0, 12, 2))
+
+
+if get_mac_address().upper() not in AUTHORIZED_MACS:
+    print("해당 장비에서만 실행 가능한 프로그램입니다.")
+    sys.exit()
 
 
 def select_folder():
