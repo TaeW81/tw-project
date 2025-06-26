@@ -1,83 +1,105 @@
 import os
-from PIL import Image, ExifTags
-from PIL.ExifTags import TAGS, GPSTAGS
-import folium
-from folium.plugins import MarkerCluster
+import json
 import base64
 import io
+from PIL import Image, ExifTags
+from PIL.ExifTags import TAGS, GPSTAGS
 import tkinter as tk
-from tkinter import filedialog
-from folium import IFrame
+from tkinter import filedialog, messagebox
 
 
 def select_folder():
+    """Show a folder selection dialog and return the chosen path."""
     root = tk.Tk()
     root.withdraw()
-    folder_selected = filedialog.askdirectory(title="사진 폴더를 선택하세요")
-    return folder_selected
+    return filedialog.askdirectory(title="사진 폴더를 선택하세요")
 
 
-def get_exif_gps(image_path):
+def show_complete_message(path: str) -> None:
+    """Display a message indicating where the HTML was saved."""
+    root = tk.Tk()
+    root.withdraw()
+    messagebox.showinfo("생성 완료", f'"{path}" 생성을 완료하였습니다.')
+    root.destroy()
+
+
+def get_exif_gps(image_path: str):
+    """Extract GPS information from an image if available."""
     try:
         image = Image.open(image_path)
         exif_data = image._getexif()
         if not exif_data:
             return None
         exif = {TAGS.get(tag, tag): value for tag, value in exif_data.items()}
-        gps_info = exif.get('GPSInfo', None)
-        if not gps_info:
-            return None
-        gps_data = {GPSTAGS.get(key, key): gps_info[key] for key in gps_info.keys()}
-        return gps_data
+        gps_info = exif.get("GPSInfo")
+        return {GPSTAGS.get(k, k): gps_info[k] for k in gps_info} if gps_info else None
     except Exception:
         return None
 
 
-def dms_to_dd(dms, ref):
+def get_photo_datetime(image_path: str) -> str:
+    """Return the photo's taken time as a formatted string."""
     try:
-        degrees = float(dms[0].numerator) / float(dms[0].denominator)
-        minutes = float(dms[1].numerator) / float(dms[1].denominator)
-        seconds = float(dms[2].numerator) / float(dms[2].denominator)
+        img = Image.open(image_path)
+        exif_data = img._getexif()
+        if exif_data and 36867 in exif_data:
+            raw = exif_data[36867]
+            return (
+                raw.replace(":", "년", 1)
+                .replace(":", "월", 1)
+                .replace(" ", "일 ")
+                .replace(":", "시", 1)
+                .replace(":", "분")
+                + "초"
+            )
+    except Exception:
+        pass
+    return "촬영일자 없음"
+
+
+def dms_to_dd(dms, ref):
+    """Convert degrees/minutes/seconds to decimal degrees."""
+    try:
+        degrees = float(dms[0].numerator) / dms[0].denominator
+        minutes = float(dms[1].numerator) / dms[1].denominator
+        seconds = float(dms[2].numerator) / dms[2].denominator
     except AttributeError:
         degrees = float(dms[0])
         minutes = float(dms[1])
         seconds = float(dms[2])
     dd = degrees + minutes / 60 + seconds / 3600
-    if ref in ['S', 'W']:
+    if ref in ["S", "W"]:
         dd *= -1
     return dd
 
 
-def auto_rotate_image(img):
+def auto_rotate_image(img: Image.Image) -> Image.Image:
+    """Rotate an image according to its EXIF orientation tag."""
     try:
         exif = img._getexif()
-        if exif is not None:
-            for orientation in ExifTags.TAGS.keys():
-                if ExifTags.TAGS[orientation] == 'Orientation':
+        if exif:
+            for orientation in ExifTags.TAGS:
+                if ExifTags.TAGS[orientation] == "Orientation":
                     break
-            orientation_value = exif.get(orientation, None)
-            if orientation_value == 3:
+            value = exif.get(orientation)
+            if value == 3:
                 img = img.rotate(180, expand=True)
-            elif orientation_value == 6:
+            elif value == 6:
                 img = img.rotate(270, expand=True)
-            elif orientation_value == 8:
+            elif value == 8:
                 img = img.rotate(90, expand=True)
     except Exception:
         pass
     return img
 
 
-def get_thumbnail_base64_and_size(image_path):
-    """Return base64 encoded thumbnail along with its size.
-
-    Thumbnails are scaled so that the height does not exceed 900 pixels to
-    better fit 1080p displays.
-    """
+def get_thumbnail_base64_and_size(image_path: str):
+    """Return a base64 thumbnail for the image along with its size."""
     try:
         img = Image.open(image_path)
         img = auto_rotate_image(img)
 
-        max_height = 900
+        max_height = 900  # fit nicely on a 1080p display
         if img.height > max_height:
             scale = max_height / img.height
             img = img.resize((int(img.width * scale), max_height), Image.LANCZOS)
@@ -91,107 +113,148 @@ def get_thumbnail_base64_and_size(image_path):
         return None, None, None
 
 
-# 폴더 선택
-folder_path = select_folder()
-if not folder_path:
-    print('폴더를 선택하지 않았습니다.')
-    exit()
+def collect_image_files(folder: str):
+    """Return a list of image file paths within the given folder."""
+    images = []
+    for root, _dirs, files in os.walk(folder):
+        for file in files:
+            if file.lower().endswith((".jpg", ".jpeg")):
+                images.append(os.path.join(root, file))
+    return images
 
-# 사진 파일 반복 처리 및 좌표 추출
-points = []
-for root, dirs, files in os.walk(folder_path):
-    for file in files:
-        if file.lower().endswith(('.jpg', '.jpeg')):
-            file_path = os.path.join(root, file)
-            gps_data = get_exif_gps(file_path)
-            if gps_data and 'GPSLatitude' in gps_data and 'GPSLongitude' in gps_data:
-                try:
-                    lat = dms_to_dd(gps_data['GPSLatitude'], gps_data['GPSLatitudeRef'])
-                    lon = dms_to_dd(gps_data['GPSLongitude'], gps_data['GPSLongitudeRef'])
-                    thumb_b64, width, height = get_thumbnail_base64_and_size(file_path)
-                    points.append({'file': file, 'lat': lat, 'lon': lon, 'thumb_b64': thumb_b64, 'width': width, 'height': height})
-                except Exception as e:
-                    print(f"{file}의 GPS 정보 변환 중 오류 발생: {e}")
 
-if not points:
-    print('GPS 정보가 있는 사진이 없습니다.')
-    exit()
+def get_unique_path(directory: str, filename: str) -> str:
+    """Return a file path that doesn't clash with existing files."""
+    base, ext = os.path.splitext(filename)
+    candidate = filename
+    counter = 1
+    while os.path.exists(os.path.join(directory, candidate)):
+        candidate = f"{base}_{counter}{ext}"
+        counter += 1
+    return os.path.join(directory, candidate)
 
-# Folium 지도 생성 (ESRI Satellite 타일 사용)
-center_lat = sum([p['lat'] for p in points]) / len(points)
-center_lon = sum([p['lon'] for p in points]) / len(points)
-m = folium.Map(location=[center_lat, center_lon], zoom_start=16, tiles=None)
 
-# 기본 ESRI Satellite 타일 추가
-esri_satellite_tiles = (
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-)
-folium.TileLayer(
-    tiles=esri_satellite_tiles,
-    attr="Esri",
-    name="Esri Satellite",
-    overlay=False,
-    control=True,
-).add_to(m)
+def main() -> None:
+    folder_path = select_folder()
+    if not folder_path:
+        print("폴더를 선택하지 않았습니다.")
+        return
 
-# VWorld 위성 타일 추가
-vworld_satellite_tiles = (
-    "http://xdworld.vworld.kr:8080/2d/Satellite/202002/{z}/{x}/{y}.jpeg"
-)
-folium.TileLayer(
-    tiles=vworld_satellite_tiles,
-    attr="VWorld",
-    name="VWorld Satellite",
-    overlay=False,
-    control=True,
-).add_to(m)
+    points = []
+    for file_path in collect_image_files(folder_path):
+        rel_path = os.path.relpath(file_path, folder_path)
+        gps = get_exif_gps(file_path)
+        if gps and "GPSLatitude" in gps and "GPSLongitude" in gps:
+            try:
+                lat = dms_to_dd(gps["GPSLatitude"], gps["GPSLatitudeRef"])
+                lon = dms_to_dd(gps["GPSLongitude"], gps["GPSLongitudeRef"])
+                thumb_b64, width, height = get_thumbnail_base64_and_size(file_path)
+                taken_time = get_photo_datetime(file_path)
+                points.append(
+                    {
+                        "path": rel_path,
+                        "lat": lat,
+                        "lon": lon,
+                        "thumb_b64": thumb_b64,
+                        "width": width,
+                        "height": height,
+                        "taken_time": taken_time,
+                    }
+                )
+            except Exception as e:
+                print(f"{rel_path} 오류: {e}")
 
-# Daum 위성 타일 추가
-daum_satellite_tiles = (
-    "https://map.daumcdn.net/map_skyview/L{z}/{y}/{x}.jpg"
-)
-folium.TileLayer(
-    tiles=daum_satellite_tiles,
-    attr="Daum",
-    name="Daum Satellite",
-    overlay=False,
-    control=True,
-).add_to(m)
+    if not points:
+        print("GPS 정보가 있는 사진이 없습니다.")
+        return
 
-# 마커 클러스터 생성
-marker_cluster = MarkerCluster(
-    name="사진 마커",
-    overlay=True,
-    control=True,
-    options={
-        'maxClusterRadius': 40,
-        'spiderfyOnMaxZoom': True,
-    }
-).add_to(m)
+    center_lat = sum(p["lat"] for p in points) / len(points)
+    center_lon = sum(p["lon"] for p in points) / len(points)
+    data_json = json.dumps(points, ensure_ascii=False)
 
-# 마커 추가 (클러스터에 추가)
-for p in points:
-    if p['thumb_b64'] and p['width'] and p['height']:
-        scale_w = int(p['width'] * 1.5)
-        scale_h = int(p['height'] * 1.5)
-        html = f'<img src="data:image/jpeg;base64,{p["thumb_b64"]}" width="{scale_w}" height="{scale_h}">' 
-        iframe = IFrame(html, width=scale_w + 20, height=scale_h + 20)
-        popup = folium.Popup(iframe, max_width=scale_w + 40)
-    else:
-        html = f'<b>(썸네일 없음)</b>'
-        iframe = IFrame(html, width=200, height=40)
-        popup = folium.Popup(iframe, max_width=220)
+    # Map tile sources
+    esri = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+    vworld_sat = "http://xdworld.vworld.kr:8080/2d/Satellite/202002/{z}/{x}/{y}.jpeg"
+    vworld_base = "http://xdworld.vworld.kr:8080/2d/Base/202002/{z}/{x}/{y}.png"
+    daum_sat = "https://map.daumcdn.net/map_skyview/L{z}/{y}/{x}.jpg"
+    daum_road = "https://map.daumcdn.net/map_2d/1907nylon/L{z}/{y}/{x}.png"
 
-    folium.Marker(
-        [p['lat'], p['lon']],
-        popup=popup,
-        tooltip=p['file']
-    ).add_to(marker_cluster)
+    html = f"""
+<!DOCTYPE html>
+<html lang=\"ko\">
+<head>
+<meta charset=\"utf-8\">
+<title>Photo Map</title>
+<link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.9.3/dist/leaflet.css\" />
+<link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css\" />
+<link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css\" />
+<style>
+body {{ margin: 0; display: flex; height: 100vh; }}
+#map {{ width: 50%; }}
+#photo-container {{
+    width: 50%;
+    overflow-y: auto;
+    padding: 10px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}}
+#photo-container img {{
+    max-width: 100%;
+    max-height: 85vh;
+    object-fit: contain;
+}}
+h4, p {{
+    margin: 4px 0;
+    text-align: center;
+}}
+</style>
+</head>
+<body>
+<div id=\"map\"></div>
+<div id=\"photo-container\"><p>사진을 클릭하면 여기에 표시됩니다.</p></div>
+<script src=\"https://unpkg.com/leaflet@1.9.3/dist/leaflet.js\"></script>
+<script src=\"https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js\"></script>
+<script>
+var baseLayers = {{
+    'Esri Satellite': L.tileLayer('{esri}', {{ attribution: 'Esri' }}),
+    'VWorld Satellite': L.tileLayer('{vworld_sat}', {{ attribution: 'VWorld' }}),
+    'VWorld Road': L.tileLayer('{vworld_base}', {{ attribution: 'VWorld' }}),
+    'Daum Satellite': L.tileLayer('{daum_sat}', {{ attribution: 'Daum' }}),
+    'Daum Road': L.tileLayer('{daum_road}', {{ attribution: 'Daum' }})
+}};
+var map = L.map('map', {{
+    center: [{center_lat}, {center_lon}],
+    zoom: 16,
+    layers: [baseLayers['Esri Satellite']]
+}});
+L.control.layers(baseLayers, null, {{ collapsed: false }}).addTo(map);
+var markers = L.markerClusterGroup({{ maxClusterRadius: 40 }});
+var data = {data_json};
+data.forEach(function(p) {{
+    var marker = L.marker([p.lat, p.lon], {{ title: p.path }});
+    marker.on('click', function() {{
+        var div = document.getElementById('photo-container');
+        div.innerHTML = '<h4>' + p.path + '</h4><p>[' + p.taken_time + ']</p>' +
+                        '<img src="data:image/jpeg;base64,' + p.thumb_b64 + '" />';
+    }});
+    markers.addLayer(marker);
+}});
+map.addLayer(markers);
+</script>
+</body>
+</html>
+"""
 
-# 레이어 컨트롤 추가하여 타일 선택 가능하도록 함
-folium.LayerControl(collapsed=False).add_to(m)
+    folder_name = os.path.basename(os.path.normpath(folder_path))
+    save_path = get_unique_path(folder_path, f"{folder_name}.html")
+    with open(save_path, "w", encoding="utf-8") as f:
+        f.write(html)
 
-# 저장 경로
-save_path = os.path.join(folder_path, "photo_map.html")
-m.save(save_path)
-print(f'photo_map.html 파일이 "{folder_path}" 폴더에 생성되었습니다!')
+    show_complete_message(save_path)
+
+
+if __name__ == "__main__":
+    main()
+
