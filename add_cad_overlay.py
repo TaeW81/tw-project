@@ -1,7 +1,12 @@
 import os
 import tkinter as tk
 from tkinter import filedialog, simpledialog
-from pyproj import Transformer
+try:
+    from pyproj import Transformer
+except ImportError as exc:  # pragma: no cover - simple user feedback
+    raise SystemExit(
+        "pyproj is required. Install it with `pip install pyproj` and rerun the script"
+    ) from exc
 
 
 def inject_html(html_path: str, overlay_code: str, output_path: str) -> str:
