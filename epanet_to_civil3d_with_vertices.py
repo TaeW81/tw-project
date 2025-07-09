@@ -196,7 +196,7 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
         pts = [(start["X"],start["Y"])] + vertices.get(p["ID"],[]) + [(end["X"],end["Y"])]
         msp.add_lwpolyline(pts, dxfattribs={"layer":"EPANET2-PIPE", "closed": False})
         cx, cy, ang = get_polyline_midpoint_angle(pts)
-        info = f"D{int(p['Diameter'])} L={int(p['Length'])}"
+        info = f"D{int(p['Diameter'])}  L={p['Length']:.2f}"
         ref = msp.add_blockref("PIPE_BLOCK", (cx, cy), dxfattribs={"rotation": ang})
         ref.dxf.layer = "EPANET2-PIPE_no"
         ref.add_auto_attribs({"ID": p["ID"], "INFO": info})
