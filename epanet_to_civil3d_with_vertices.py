@@ -115,7 +115,7 @@ def get_safe_output_path(base_path):
         i += 1
 
 
-def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out_path):
+def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out_path, text_height=0.5):
     """DXF \uc0dd\uc131: VERTICES \uae30\ubc18 Polyline, \ube14\ub85d \uc18d\uc131, \ub808\uc774\uc5b4 \uc815\ub9ac"""
     doc = ezdxf.new(dxfversion='R2018')
     doc.layers.new('EPANET2-PIPE',    dxfattribs={'color': 3})
@@ -123,18 +123,21 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
     doc.layers.new('EPANET2-PIPE_no')
     msp = doc.modelspace()
 
-    def define_block(name, draw_func, attribs):
+    def define_block(name, draw_func, attribs, center=False):
         blk = doc.blocks.new(name=name)
         draw_func(blk)
         for tag, pos in attribs.items():
-            blk.add_attdef(tag=tag, insert=Vec2(*pos), height=0.5)
+            att = blk.add_attdef(tag=tag, insert=Vec2(*pos), height=text_height)
+            if center:
+                att.set_pos(Vec2(*pos), align='MIDDLE_CENTER')
 
     define_block("JUNCTION_BLOCK",
                  lambda b: b.add_circle((0,0), radius=1),
                  {"ID": (1.5,0.5), "ELEV": (1.5,-0.2), "DEMAND": (1.5,-1)})
     define_block("PIPE_BLOCK",
                  lambda b: None,
-                 {"ID": (0,1), "INFO": (0,-1)})
+                 {"ID": (0,1), "INFO": (0,-1)},
+                 center=True)
     define_block("RESERVOIR_BLOCK",
                  lambda b: b.add_circle((0,0), radius=2),
                  {"ID": (2,0), "HEAD": (2,-0.5)})
@@ -191,6 +194,10 @@ if __name__ == "__main__":
     if inp:
         base_out = os.path.splitext(inp)[0] + "_with_vertices.dxf"
         junc, res, tank, pipe, pump, valve, verts = parse_inp_file(inp)
-        create_dxf(junc, res, tank, pipe, pump, valve, verts, base_out)
+        try:
+            th = float(input("\ub9c1\ud06c \ud14d\uc2a4\ud2b8 \ub192\uc774(\uae30\ubcf8 0.5): ") or 0.5)
+        except ValueError:
+            th = 0.5
+        create_dxf(junc, res, tank, pipe, pump, valve, verts, base_out, text_height=th)
     else:
         print("\u2757 INP \ud30c\uc77c\uc774 \uc120\ud0dd\ub418\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4.")
