@@ -177,9 +177,8 @@ def create_dxf(
         center=True,
         default_height=junction_height,
     )
-    # offset half the text height so the spacing between two lines equals one
-    # text height regardless of the actual size
-    offset = text_height * 0.5
+    # offset 0.75× text height so when the size is 2 the gap becomes 3
+    offset = text_height * 0.75
     define_block(
         "PIPE_BLOCK",
         lambda b: None,
@@ -210,7 +209,7 @@ def create_dxf(
         pts = [(start["X"],start["Y"])] + vertices.get(p["ID"],[]) + [(end["X"],end["Y"])]
         msp.add_lwpolyline(pts, dxfattribs={"layer":"EPANET2-PIPE", "closed": False})
         cx, cy, ang = get_polyline_midpoint_angle(pts)
-        info = f"D{int(p['Diameter'])}  L={p['Length']:.2f}"
+        info = f"D{int(p['Diameter'])} L={p['Length']:.2f}"
         ref = msp.add_blockref("PIPE_BLOCK", (cx, cy), dxfattribs={"rotation": ang})
         ref.dxf.layer = "EPANET2-PIPE_no"
         ref.add_auto_attribs({"ID": p["ID"], "INFO": info})
