@@ -127,14 +127,20 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
         blk = doc.blocks.new(name=name)
         draw_func(blk)
         for tag, value in attribs.items():
-            if isinstance(value, tuple) and len(value) == 3:
+            if isinstance(value, tuple):
                 pos = value[:2]
-                hgt = value[2]
+                hgt = value[2] if len(value) >= 3 else text_height
+                width = value[3] if len(value) >= 4 else 0.8
+                color = value[4] if len(value) >= 5 else None
             else:
                 pos = value
                 hgt = text_height
+                width = 0.8
+                color = None
             att = blk.add_attdef(tag=tag, insert=Vec2(*pos), height=hgt)
-            att.dxf.width = 0.8
+            att.dxf.width = width
+            if color is not None:
+                att.dxf.color = color
             if center:
                 if hasattr(att, "set_pos"):
                     att.set_pos(Vec2(*pos), align="MIDDLE_CENTER")
@@ -148,7 +154,7 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
                         att.dxf.align_point = Vec2(*pos)
 
     def draw_junction(b):
-        b.add_circle((0, 0), radius=3)
+        b.add_circle((0, 0), radius=3, dxfattribs={"color": 5})
         hatch = b.add_hatch(color=255, dxfattribs={"pattern_name": "SOLID"})
         path = hatch.paths.add_edge_path()
         path.add_arc((0, 0), radius=3, start_angle=0, end_angle=360)
@@ -156,7 +162,7 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
     define_block(
         "JUNCTION_BLOCK",
         draw_junction,
-        {"ID": (0, 0, 3)},
+        {"ID": (0, 0, 3, 0.7, 5)},
         center=True,
     )
     offset = text_height * 0.75
