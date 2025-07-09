@@ -129,15 +129,30 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
         for tag, pos in attribs.items():
             att = blk.add_attdef(tag=tag, insert=Vec2(*pos), height=text_height)
             if center:
-                att.set_pos(Vec2(*pos), align='MIDDLE_CENTER')
+                if hasattr(att, "set_pos"):
+                    att.set_pos(Vec2(*pos), align="MIDDLE_CENTER")
+                else:
+                    # fallback for older ezdxf versions
+                    if hasattr(att.dxf, "halign"):
+                        att.dxf.halign = 1  # center
+                    if hasattr(att.dxf, "valign"):
+                        att.dxf.valign = 2  # middle
+                    if hasattr(att.dxf, "align_point"):
+                        att.dxf.align_point = Vec2(*pos)
 
     define_block("JUNCTION_BLOCK",
                  lambda b: b.add_circle((0,0), radius=1),
                  {"ID": (1.5,0.5), "ELEV": (1.5,-0.2), "DEMAND": (1.5,-1)})
-    define_block("PIPE_BLOCK",
-                 lambda b: None,
-                 {"ID": (0,1), "INFO": (0,-1)},
-                 center=True)
+    offset = text_height / 4.0
+    define_block(
+        "PIPE_BLOCK",
+        lambda b: None,
+        {
+            "ID": (0, offset),
+            "INFO": (0, -offset),
+        },
+        center=True,
+    )
     define_block("RESERVOIR_BLOCK",
                  lambda b: b.add_circle((0,0), radius=2),
                  {"ID": (2,0), "HEAD": (2,-0.5)})
