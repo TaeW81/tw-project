@@ -1,7 +1,7 @@
 import os
 import re
 import math
-from tkinter import Tk, filedialog
+from tkinter import Tk, filedialog, simpledialog
 import ezdxf
 from ezdxf.math import Vec2
 
@@ -128,6 +128,7 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
         draw_func(blk)
         for tag, pos in attribs.items():
             att = blk.add_attdef(tag=tag, insert=Vec2(*pos), height=text_height)
+            att.dxf.width = 0.8
             if center:
                 if hasattr(att, "set_pos"):
                     att.set_pos(Vec2(*pos), align="MIDDLE_CENTER")
@@ -143,7 +144,7 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
     define_block("JUNCTION_BLOCK",
                  lambda b: b.add_circle((0,0), radius=1),
                  {"ID": (1.5,0.5), "ELEV": (1.5,-0.2), "DEMAND": (1.5,-1)})
-    offset = text_height / 4.0
+    offset = text_height * 0.75
     define_block(
         "PIPE_BLOCK",
         lambda b: None,
@@ -174,7 +175,7 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
         pts = [(start["X"],start["Y"])] + vertices.get(p["ID"],[]) + [(end["X"],end["Y"])]
         msp.add_lwpolyline(pts, dxfattribs={"layer":"EPANET2-PIPE", "closed": False})
         cx, cy, ang = get_polyline_midpoint_angle(pts)
-        info = f"D{int(p['Diameter'])}  L={int(p['Length'])}"
+        info = f"D{int(p['Diameter'])} L={int(p['Length'])}"
         ref = msp.add_blockref("PIPE_BLOCK", (cx, cy), dxfattribs={"rotation": ang})
         ref.dxf.layer = "EPANET2-PIPE_no"
         ref.add_auto_attribs({"ID": p["ID"], "INFO": info})
@@ -204,15 +205,15 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
 
 
 if __name__ == "__main__":
-    Tk().withdraw()
-    inp = filedialog.askopenfilename(title="EPANET INP \ud30c\uc77c \uc120\ud0dd", filetypes=[("INP","*.inp")])
+    root = Tk()
+    root.withdraw()
+    inp = filedialog.askopenfilename(title="EPANET INP 파일 선택", filetypes=[("INP", "*.inp")])
     if inp:
         base_out = os.path.splitext(inp)[0] + "_with_vertices.dxf"
         junc, res, tank, pipe, pump, valve, verts = parse_inp_file(inp)
-        try:
-            th = float(input("\ub9c1\ud06c \ud14d\uc2a4\ud2b8 \ub192\uc774(\uae30\ubcf8 0.5): ") or 0.5)
-        except ValueError:
+        th = simpledialog.askfloat("Text Height", "링크 텍스트 높이(기본 0.5):", initialvalue=0.5)
+        if th is None:
             th = 0.5
         create_dxf(junc, res, tank, pipe, pump, valve, verts, base_out, text_height=th)
     else:
-        print("\u2757 INP \ud30c\uc77c\uc774 \uc120\ud0dd\ub418\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4.")
+        print("❗ INP 파일이 선택되지 않았습니다.")
