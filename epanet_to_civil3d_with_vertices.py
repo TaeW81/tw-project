@@ -126,8 +126,14 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
     def define_block(name, draw_func, attribs, center=False):
         blk = doc.blocks.new(name=name)
         draw_func(blk)
-        for tag, pos in attribs.items():
-            att = blk.add_attdef(tag=tag, insert=Vec2(*pos), height=text_height)
+        for tag, value in attribs.items():
+            if isinstance(value, tuple) and len(value) == 3:
+                pos = value[:2]
+                hgt = value[2]
+            else:
+                pos = value
+                hgt = text_height
+            att = blk.add_attdef(tag=tag, insert=Vec2(*pos), height=hgt)
             att.dxf.width = 0.8
             if center:
                 if hasattr(att, "set_pos"):
@@ -141,9 +147,18 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
                     if hasattr(att.dxf, "align_point"):
                         att.dxf.align_point = Vec2(*pos)
 
-    define_block("JUNCTION_BLOCK",
-                 lambda b: b.add_circle((0,0), radius=1),
-                 {"ID": (1.5,0.5), "ELEV": (1.5,-0.2), "DEMAND": (1.5,-1)})
+    def draw_junction(b):
+        b.add_circle((0, 0), radius=3)
+        hatch = b.add_hatch(color=255, dxfattribs={"pattern_name": "SOLID"})
+        path = hatch.paths.add_edge_path()
+        path.add_arc((0, 0), radius=3, start_angle=0, end_angle=360)
+
+    define_block(
+        "JUNCTION_BLOCK",
+        draw_junction,
+        {"ID": (0, 0, 3)},
+        center=True,
+    )
     offset = text_height * 0.75
     define_block(
         "PIPE_BLOCK",
@@ -184,9 +199,7 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
         if "X" in j and "Y" in j:
             ref = msp.add_blockref("JUNCTION_BLOCK", (j["X"], j["Y"]))
             ref.dxf.layer = "EPANET2-JUNCTION"
-            ref.add_auto_attribs({
-                "ID": j["ID"], "ELEV": str(j["Elevation"]), "DEMAND": str(j["Demand"])
-            })
+            ref.add_auto_attribs({"ID": j["ID"]})
 
     for coll, blk_name, tagmap in [
         (reservoirs, "RESERVOIR_BLOCK", {"ID":"ID","HEAD":"Head"}),
