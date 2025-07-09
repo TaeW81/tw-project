@@ -124,7 +124,7 @@ def create_dxf(
     valves,
     vertices,
     out_path,
-    text_height=0.5,
+    text_height=2,
     junction_height=3,
 ):
     """DXF \uc0dd\uc131: VERTICES \uae30\ubc18 Polyline, \ube14\ub85d \uc18d\uc131, \ub808\uc774\uc5b4 \uc815\ub9ac"""
@@ -218,6 +218,8 @@ def create_dxf(
             ref = msp.add_blockref("JUNCTION_BLOCK", (j["X"], j["Y"]))
             ref.dxf.layer = "EPANET2-JUNCTION"
             atts = ref.add_auto_attribs({"ID": j["ID"]})
+            if not isinstance(atts, (list, tuple)):
+                atts = list(ref.attribs)
             for a in atts:
                 if getattr(a.dxf, "tag", "") == "ID":
                     a.dxf.width = 0.55 if len(j["ID"]) >= 4 else 0.7
@@ -246,9 +248,9 @@ if __name__ == "__main__":
     if inp:
         base_out = os.path.splitext(inp)[0] + "_with_vertices.dxf"
         junc, res, tank, pipe, pump, valve, verts = parse_inp_file(inp)
-        th = simpledialog.askfloat("Text Height", "링크 텍스트 높이(기본 0.5):", initialvalue=0.5)
+        th = simpledialog.askfloat("Text Height", "링크 텍스트 높이(기본 2):", initialvalue=2.0)
         if th is None:
-            th = 0.5
+            th = 2.0
         jh = simpledialog.askfloat("Junction Text Height", "정션 텍스트 높이(기본 3):", initialvalue=3.0)
         if jh is None:
             jh = 3.0
