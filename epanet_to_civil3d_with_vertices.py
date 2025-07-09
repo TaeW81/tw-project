@@ -115,7 +115,18 @@ def get_safe_output_path(base_path):
         i += 1
 
 
-def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out_path, text_height=0.5):
+def create_dxf(
+    junctions,
+    reservoirs,
+    tanks,
+    pipes,
+    pumps,
+    valves,
+    vertices,
+    out_path,
+    text_height=0.5,
+    junction_height=3,
+):
     """DXF \uc0dd\uc131: VERTICES \uae30\ubc18 Polyline, \ube14\ub85d \uc18d\uc131, \ub808\uc774\uc5b4 \uc815\ub9ac"""
     doc = ezdxf.new(dxfversion='R2018')
     doc.layers.new('EPANET2-PIPE',    dxfattribs={'color': 3})
@@ -123,18 +134,18 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
     doc.layers.new('EPANET2-PIPE_no')
     msp = doc.modelspace()
 
-    def define_block(name, draw_func, attribs, center=False):
+    def define_block(name, draw_func, attribs, center=False, default_height=text_height):
         blk = doc.blocks.new(name=name)
         draw_func(blk)
         for tag, value in attribs.items():
             if isinstance(value, tuple):
                 pos = value[:2]
-                hgt = value[2] if len(value) >= 3 else text_height
+                hgt = value[2] if len(value) >= 3 else default_height
                 width = value[3] if len(value) >= 4 else 0.8
                 color = value[4] if len(value) >= 5 else None
             else:
                 pos = value
-                hgt = text_height
+                hgt = default_height
                 width = 0.8
                 color = None
             att = blk.add_attdef(tag=tag, insert=Vec2(*pos), height=hgt)
@@ -154,16 +165,17 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
                         att.dxf.align_point = Vec2(*pos)
 
     def draw_junction(b):
-        b.add_circle((0, 0), radius=3, dxfattribs={"color": 5})
+        b.add_circle((0, 0), radius=junction_height, dxfattribs={"color": 5})
         hatch = b.add_hatch(color=255, dxfattribs={"pattern_name": "SOLID"})
         path = hatch.paths.add_edge_path()
-        path.add_arc((0, 0), radius=3, start_angle=0, end_angle=360)
+        path.add_arc((0, 0), radius=junction_height, start_angle=0, end_angle=360)
 
     define_block(
         "JUNCTION_BLOCK",
         draw_junction,
-        {"ID": (0, 0, 3, 0.7, 5)},
+        {"ID": (0, 0, junction_height, 0.7, 5)},
         center=True,
+        default_height=junction_height,
     )
     offset = text_height * 0.75
     define_block(
@@ -205,7 +217,11 @@ def create_dxf(junctions, reservoirs, tanks, pipes, pumps, valves, vertices, out
         if "X" in j and "Y" in j:
             ref = msp.add_blockref("JUNCTION_BLOCK", (j["X"], j["Y"]))
             ref.dxf.layer = "EPANET2-JUNCTION"
-            ref.add_auto_attribs({"ID": j["ID"]})
+            atts = ref.add_auto_attribs({"ID": j["ID"]})
+            for a in atts:
+                if getattr(a.dxf, "tag", "") == "ID":
+                    a.dxf.width = 0.55 if len(j["ID"]) >= 4 else 0.7
+                    break
 
     for coll, blk_name, tagmap in [
         (reservoirs, "RESERVOIR_BLOCK", {"ID":"ID","HEAD":"Head"}),
@@ -233,6 +249,20 @@ if __name__ == "__main__":
         th = simpledialog.askfloat("Text Height", "링크 텍스트 높이(기본 0.5):", initialvalue=0.5)
         if th is None:
             th = 0.5
-        create_dxf(junc, res, tank, pipe, pump, valve, verts, base_out, text_height=th)
+        jh = simpledialog.askfloat("Junction Text Height", "정션 텍스트 높이(기본 3):", initialvalue=3.0)
+        if jh is None:
+            jh = 3.0
+        create_dxf(
+            junc,
+            res,
+            tank,
+            pipe,
+            pump,
+            valve,
+            verts,
+            base_out,
+            text_height=th,
+            junction_height=jh,
+        )
     else:
         print("❗ INP 파일이 선택되지 않았습니다.")
