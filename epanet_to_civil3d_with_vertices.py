@@ -177,7 +177,9 @@ def create_dxf(
         center=True,
         default_height=junction_height,
     )
-    offset = text_height * 0.75
+    # offset half the text height so the spacing between two lines equals one
+    # text height regardless of the actual size
+    offset = text_height * 0.5
     define_block(
         "PIPE_BLOCK",
         lambda b: None,
@@ -217,10 +219,8 @@ def create_dxf(
         if "X" in j and "Y" in j:
             ref = msp.add_blockref("JUNCTION_BLOCK", (j["X"], j["Y"]))
             ref.dxf.layer = "EPANET2-JUNCTION"
-            atts = ref.add_auto_attribs({"ID": j["ID"]})
-            if not isinstance(atts, (list, tuple)):
-                atts = list(ref.attribs)
-            for a in atts:
+            ref.add_auto_attribs({"ID": j["ID"]})
+            for a in ref.attribs:
                 if getattr(a.dxf, "tag", "") == "ID":
                     a.dxf.width = 0.55 if len(j["ID"]) >= 4 else 0.7
                     break
