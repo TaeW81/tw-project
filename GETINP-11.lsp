@@ -231,7 +231,26 @@
   )
 )
 
-(defun write-pipes-and-vertices (file pipeline-ss / ent id node1 node2 len dia data_list vertices_list i segs segEnt segPts vtxlist polyStart lastPt midpt startpt endpt)
+(defun explode-to-segments (ent / obj sa segs)
+  "Explode ENT and return a list of the resulting segment enames."
+  (setq obj (vlax-ename->vla-object ent))
+  (setq sa (vlax-invoke obj 'Explode))
+  (vlax-safearray->list sa)
+)
+
+;; Return list of segment enames without modifying simple entities
+(defun get-object-segments (ent / type segs)
+  (setq type (cdr (assoc 0 (entget ent))))
+  (cond
+    ((or (= type "LWPOLYLINE") (= type "POLYLINE"))
+      (setq segs (mapcar 'vlax-vla-object->ename (explode-to-segments ent)))
+    )
+    (T (setq segs (list ent)))
+  )
+  segs
+)
+
+(defun write-pipes-and-vertices (file pipeline-ss / ent id node1 node2 len dia data_list vertices_list i segs segEnt segPts vtxlist polyStart lastPt midpt startpt endpt delSegs)
   (vl-load-com)
   (princ-kr MSG_PIPE_INFO)
   (princ-kr (strcat MSG_PIPELINE_COUNT (itoa (sslength pipeline-ss))))
@@ -241,7 +260,8 @@
       (setq i 0)
       (repeat (sslength pipeline-ss)
         (setq ent (ssname pipeline-ss i))
-        (setq segs (acet-geom-object-segments ent))
+        (setq segs (get-object-segments ent))
+        (setq delSegs (if (> (length segs) 1) segs '()))
         (setq vtxlist '())
         (setq polyStart (vlax-curve-getstartpoint ent))
         ;; 첫 세그먼트 처리
@@ -274,7 +294,12 @@
         (setq data_list 
               (cons (list id node1 node2 (rtos len 2 2) dia "110" "0" "Open") data_list))
         (foreach vtx vtxlist
-          (setq vertices_list (cons (list id (rtos (car vtx) 2 12) (rtos (cadr vtx) 2 12)) vertices_list)))
+          (setq vertices_list
+                (cons (list id (rtos (car vtx) 2 12)
+                           (rtos (cadr vtx) 2 12))
+                      vertices_list)))
+        ;; clean up exploded segments if any
+        (foreach s delSegs (entdel s))
         (setq i (1+ i))
       )
       (setq data_list (vl-sort data_list '(lambda (a b) (< (car a) (car b)))))
