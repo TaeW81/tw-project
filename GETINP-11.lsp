@@ -231,11 +231,19 @@
   )
 )
 
-(defun explode-to-segments (ent / obj sa segs)
-  "Explode ENT and return a list of the resulting segment enames."
+(defun explode-to-segments (ent / obj sa)
+  "Explode ENT and return a list of the resulting segment VLA objects.
+  Different AutoCAD versions may return either a safearray variant or a
+  plain list of objects.  This helper normalizes the result to a list so
+  subsequent code can rely on it without throwing a safearray error."
   (setq obj (vlax-ename->vla-object ent))
   (setq sa (vlax-invoke obj 'Explode))
-  (vlax-safearray->list sa)
+  (cond
+    ((vlax-safearray-p sa)
+     (vlax-safearray->list sa))
+    ((listp sa) sa)
+    (T (list sa))
+  )
 )
 
 ;; Return list of segment enames without modifying simple entities
